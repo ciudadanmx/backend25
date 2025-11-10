@@ -45,6 +45,19 @@
     },
     "status": {
       "type": "string"
+    },
+    "usuarioemail": {
+      "type": "email"
+    },
+    "tipo": {
+      "type": "enumeration",
+      "enum": [
+        "jardinero",
+        "consumo",
+        "exterior",
+        "sencilla",
+        "doble"
+      ]
     }
   }
 }

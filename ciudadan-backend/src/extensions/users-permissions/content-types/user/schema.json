@@ -161,6 +161,135 @@
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::direccion.direccion"
+    },
+    "demandaamparo": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "escritolibrecofepris": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "files": {
+      "type": "media",
+      "multiple": true,
+      "required": false,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "esperandocofepris": {
+      "type": "boolean"
+    },
+    "observaciones": {
+      "type": "text"
+    },
+    "settings": {
+      "type": "json"
+    },
+    "profile": {
+      "type": "json"
+    },
+    "profilepic": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "esperandoamparo": {
+      "type": "boolean"
+    },
+    "tipoamparo": {
+      "type": "enumeration",
+      "enum": [
+        "autoamparo",
+        "membresiaconsumo",
+        "membresiaclubcultivo",
+        "jardinero",
+        "cliente",
+        "otro"
+      ]
+    },
+    "amparostatus": {
+      "type": "string"
+    },
+    "isclub": {
+      "type": "boolean"
+    },
+    "haveclub": {
+      "type": "boolean"
+    },
+    "ciudad": {
+      "type": "string"
+    },
+    "openpayid": {
+      "type": "string"
+    },
+    "openpaykey": {
+      "type": "string"
+    },
+    "rfc": {
+      "type": "string"
+    },
+    "curp": {
+      "type": "string"
+    },
+    "foliocofepris": {
+      "type": "string"
+    },
+    "club": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::club.club"
+    },
+    "clubid": {
+      "type": "string"
+    },
+    "isJardinero": {
+      "type": "boolean"
+    },
+    "membresiatipo": {
+      "type": "enumeration",
+      "enum": [
+        "consumo",
+        "cultivo",
+        "jardinero",
+        "socio"
+      ]
+    },
+    "proximacosecha": {
+      "type": "date"
+    },
+    "curado": {
+      "type": "decimal"
+    },
+    "secado": {
+      "type": "integer"
+    },
+    "registrolegal": {
+      "type": "text"
     }
   }
 }

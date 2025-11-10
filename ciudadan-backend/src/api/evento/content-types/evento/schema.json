@@ -104,6 +104,9 @@
     },
     "descripcion": {
       "type": "text"
+    },
+    "description": {
+      "type": "richtext"
     }
   }
 }

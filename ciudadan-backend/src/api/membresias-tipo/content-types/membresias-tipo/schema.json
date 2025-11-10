@@ -1,0 +1,41 @@
+{
+  "kind": "collectionType",
+  "collectionName": "membresias_tipos",
+  "info": {
+    "singularName": "membresias-tipo",
+    "pluralName": "membresias-tipos",
+    "displayName": "MembresiasTipo",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "order": {
+      "type": "integer"
+    },
+    "json": {
+      "type": "json"
+    },
+    "openpayid": {
+      "type": "string"
+    },
+    "level": {
+      "type": "integer"
+    },
+    "subtypes": {
+      "type": "boolean"
+    },
+    "pic": {
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ],
+      "type": "media",
+      "multiple": false
+    }
+  }
+}
