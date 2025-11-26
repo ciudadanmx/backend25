@@ -1,5 +1,7 @@
+// lib/fareServer.js
 function metersToKm(meters) { return (meters || 0) / 1000; }
 function secondsToMinutes(seconds) { return (seconds || 0) / 60; }
+
 function calculateFareFromMetersSeconds(meters, seconds, opts = {}) {
   const baseFare = opts.baseFare ?? 10;
   const perKm = opts.perKm ?? 6.0;
@@ -16,7 +18,18 @@ function calculateFareFromMetersSeconds(meters, seconds, opts = {}) {
 
   return {
     fare,
-    breakdown: { baseFare, perKm, perMin, km: Number(km.toFixed(3)), minutes: Number(minutes.toFixed(2)), surge, raw: Number(raw.toFixed(2)), rounded: Number(rounded.toFixed(2)), minFare }
+    breakdown: {
+      baseFare,
+      perKm,
+      perMin,
+      km: Number(km.toFixed(3)),
+      minutes: Number(minutes.toFixed(2)),
+      surge,
+      raw: Number(raw.toFixed(2)),
+      rounded: Number(rounded.toFixed(2)),
+      minFare
+    }
   };
 }
-module.exports = { calculateFareFromMetersSeconds };
+
+module.exports = { calculateFareFromMetersSeconds, metersToKm, secondsToMinutes };

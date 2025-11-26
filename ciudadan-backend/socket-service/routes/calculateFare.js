@@ -2,7 +2,42 @@
 const express = require('express');
 const axios = require('axios');
 const router = express.Router();
-const { calculateFareFromMetersSeconds } = require('../lib/fareServer'); // same as before
+const { calculateFareFromMetersSeconds } = require('../lib/fareServer');
+
+// Formatter MXN
+const MXN_FMT = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+function formatMXN(v) {
+  if (v === null || v === undefined || isNaN(Number(v))) return null;
+  return MXN_FMT.format(Number(v));
+}
+
+function formatBreakdownNumeric(bd) {
+  return {
+    baseFare: Number(bd.baseFare),
+    perKm: Number(bd.perKm),
+    perMin: Number(bd.perMin),
+    km: Number(bd.km),
+    minutes: Number(bd.minutes),
+    surge: Number(bd.surge),
+    raw: Number(bd.raw),
+    rounded: Number(bd.rounded),
+    minFare: Number(bd.minFare),
+  };
+}
+
+function formatBreakdownFormatted(bd) {
+  return {
+    baseFare: formatMXN(bd.baseFare),
+    perKm: `${formatMXN(bd.perKm)} / km`,
+    perMin: `${formatMXN(bd.perMin)} / min`,
+    km: `${Number(bd.km).toFixed(3)} km`,
+    minutes: `${Number(bd.minutes).toFixed(2)} min`,
+    surge: Number(bd.surge),
+    raw: formatMXN(bd.raw),
+    rounded: formatMXN(bd.rounded),
+    minFare: formatMXN(bd.minFare),
+  };
+}
 
 // Config cache simple (evita solicitar Strapi en cada request)
 let configCache = null;
@@ -10,47 +45,132 @@ let configCacheAt = 0;
 const CONFIG_TTL_MS = 60 * 1000; // 60s cache (ajusta si quieres)
 
 async function fetchTarifaConfig() {
+  console.log("----- fetchTarifaConfig() START -----");
   const now = Date.now();
   if (configCache && (now - configCacheAt) < CONFIG_TTL_MS) {
+    console.log("[CACHE HIT]");
     return configCache;
   }
 
   const STRAPI_URL = process.env.STRAPI_URL;
-  if (!STRAPI_URL) {
-    throw new Error('STRAPI_URL no definido en .env');
-  }
+  if (!STRAPI_URL) throw new Error("STRAPI_URL no definido en .env");
+  const base = STRAPI_URL.replace(/\/$/, '');
 
-  // Endpoint Strapi v4 — filtramos por parametro == "tarifataxi" y poblamos el campo basic_set
-  const endpoint = `${STRAPI_URL.replace(/\/$/, '')}/api/configuraciones-sistema?filters[parametro][$eq]=tarifataxi&populate=basic_set`;
+  // endpoints a probar (ordenados)
+  const endpoints = [
+    `${base}/api/configuraciones-sistemas?filters[parametro][$eq]=tarifataxi&populate=basic_set`,
+    `${base}/api/configuraciones-sistemas?filters[parametro][$eq]=tarifataxi`,
+    `${base}/api/configuraciones-sistemas?populate=basic_set`,
+    `${base}/api/configuraciones-sistemas?populate=*`,
+    `${base}/api/configuraciones-sistema?filters[parametro][$eq]=tarifataxi&populate=basic_set`,
+    `${base}/api/configuraciones-sistema?populate=basic_set`,
+  ];
 
-  const resp = await axios.get(endpoint, { timeout: 8000 });
-  // La respuesta típica de Strapi v4: { data: [ { id, attributes: { basic_set: {...}, parametro: "..."} } ], meta: {...} }
-  if (!resp.data || !Array.isArray(resp.data.data) || resp.data.data.length === 0) {
-    throw new Error('Configuración "tarifataxi" no encontrada en Strapi');
-  }
-
-  const first = resp.data.data[0];
-  let basic = first.attributes && first.attributes.basic_set ? first.attributes.basic_set : null;
-
-  // Si Strapi guardó basic_set como string JSON
-  if (basic && typeof basic === 'string') {
-    try {
-      basic = JSON.parse(basic);
-    } catch (e) {
-      // leave as string (invalid) - handled later
+  // opciones axios comunes
+  const axiosOptsBase = {
+    timeout: 15000,
+    headers: {
+      Accept: 'application/json, text/plain, */*',
+      'User-Agent': 'ciudadan-backend/1.0 (+https://ciudadan.org)',
+      // opcionalmente agrega Origin si Cloudflare lo requiere:
+      // Origin: 'https://ciudadan.org'
     }
+  };
+
+  let lastErr = null;
+  let resp = null;
+
+  // retry simple con backoff
+  for (const url of endpoints) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        console.log(`[TRY] ${url} (attempt ${attempt})`);
+        resp = await axios.get(url, axiosOptsBase);
+        console.log(`[OK] ${url} -> status ${resp.status}`);
+        break;
+      } catch (err) {
+        lastErr = err;
+        const status = err?.response?.status;
+        console.warn(`[WARN] ${url} attempt ${attempt} -> ${status || err.code || err.message}`);
+        // si code de red (ENOTFOUND, ECONNREFUSED) puede ser DNS/conn problem
+        if (attempt < 3) {
+          const backoff = 300 * attempt;
+          console.log(` waiting ${backoff}ms before retry...`);
+          await new Promise(r => setTimeout(r, backoff));
+          continue;
+        }
+      }
+    }
+    if (resp && resp.status && resp.status >= 200 && resp.status < 300) break;
   }
 
-  // Si no es objeto válido, lanzar
+  if (!resp) {
+    console.error("[ERROR] No se obtuvo respuesta de Strapi. Último error:", lastErr && lastErr.message ? lastErr.message : lastErr);
+    throw new Error(`Error consultando Strapi: ${lastErr && lastErr.message ? lastErr.message : 'no response'}`);
+  }
+
+  console.log("[RAW STRAPI RESPONSE STATUS]", resp.status);
+  // intentar loguear un fragmento del body para debug sin spamear
+  try {
+    const bodyPreview = typeof resp.data === 'object' ? JSON.stringify(resp.data, null, 2) : String(resp.data);
+    console.log("[RAW STRAPI BODY PREVIEW]:", bodyPreview.slice(0, 2000));
+  } catch (e) {
+    console.log("[RAW BODY] non-serializable");
+  }
+
+  const items = Array.isArray(resp?.data?.data) ? resp.data.data : (Array.isArray(resp?.data) ? resp.data : []);
+  if (!items || items.length === 0) {
+    console.error("[ERROR] resp.data.data vacío o no es array");
+    throw new Error('Configuración "tarifataxi" no encontrada en Strapi (respuesta vacía)');
+  }
+
+  const found = items.find(it => {
+    const p = it?.attributes?.parametro ?? it?.parametro;
+    return String(p ?? '').toLowerCase() === 'tarifataxi';
+  }) || items[0];
+
+  if (!found) throw new Error('No se encontró elemento con parametro "tarifataxi"');
+
+  console.log("[FOUND ITEM - RAW]:", JSON.stringify(found, null, 2));
+
+  let basic = found?.attributes?.basic_set ?? found?.basic_set ?? null;
+
+  if (typeof basic === 'string') {
+    console.log("[INFO] basic_set viene como string; parseando...");
+    try { basic = JSON.parse(basic); }
+    catch (e) { throw new Error('basic_set no es JSON válido'); }
+  }
+
+  if (basic && basic.data && basic.data.attributes) {
+    basic = basic.data.attributes;
+  } else if (basic && basic.attributes) {
+    basic = basic.attributes;
+  }
+
   if (!basic || typeof basic !== 'object') {
-    throw new Error('basic_set inválido o vacío para parametro tarifataxi');
+    console.error("[ERROR] basic_set inválido:", basic);
+    throw new Error('basic_set inválido o vacío');
   }
 
-  // guardar en cache
-  configCache = basic;
+  // normalizar numéricos
+  const expected = ['baseFare','perKm','perMin','surge','minFare','roundTo'];
+  const normalized = {};
+  expected.forEach(k => {
+    if (basic[k] !== undefined) {
+      const n = Number(basic[k]);
+      normalized[k] = isNaN(n) ? basic[k] : n;
+    }
+  });
+  // copiar extras
+  Object.keys(basic).forEach(k => { if (!normalized.hasOwnProperty(k)) normalized[k] = basic[k]; });
+
+  configCache = normalized;
   configCacheAt = Date.now();
-  return basic;
+  console.log("[FINAL CONFIG]:", configCache);
+  console.log("----- fetchTarifaConfig() END -----");
+  return configCache;
 }
+
 
 router.post('/calculate-fare', async (req, res) => {
   try {
@@ -63,10 +183,9 @@ router.post('/calculate-fare', async (req, res) => {
       tarifaConfig = await fetchTarifaConfig();
     } catch (cfgErr) {
       console.warn('No se pudo obtener tarifa desde Strapi, usando defaults:', String(cfgErr));
-      tarifaConfig = null; // luego caerá en defaults
+      tarifaConfig = null;
     }
 
-    // Defaults si Strapi falla o faltan campos
     const DEFAULTS = {
       baseFare: 9.19,
       perKm: 5.84,
@@ -78,7 +197,6 @@ router.post('/calculate-fare', async (req, res) => {
 
     const config = Object.assign({}, DEFAULTS, tarifaConfig || {});
 
-    // Construimos el origin/destination para Google
     const originParam = typeof origin === 'string' ? origin : `${origin.lat},${origin.lng}`;
     const destParam = typeof destination === 'string' ? destination : `${destination.lat},${destination.lng}`;
 
@@ -92,12 +210,10 @@ router.post('/calculate-fare', async (req, res) => {
     const r = await axios.get(url, { timeout: 10000 });
     if (!r.data || r.data.status !== 'OK' || !r.data.routes || !r.data.routes.length) {
       // fallback: intentamos aproximar distancia por Haversine si vienen coords
-      let fallback = {};
       try {
         if (typeof origin === 'object' && typeof destination === 'object' && origin.lat && origin.lng && destination.lat && destination.lng) {
           const meters = haversineMeters(origin, destination);
-          // estimar tiempo (velocidad promedio 30 km/h -> 8.33 m/s) -> tiempo = meters / 8.33
-          const approxDuration = Math.max(60, Math.round(meters / 8.33)); // al menos 1 minuto
+          const approxDuration = Math.max(60, Math.round(meters / 8.33)); // velocidad promedio ~30 km/h -> 8.33 m/s
           const fareObj = calculateFareFromMetersSeconds(meters, approxDuration, {
             baseFare: config.baseFare,
             perKm: config.perKm,
@@ -106,14 +222,21 @@ router.post('/calculate-fare', async (req, res) => {
             minFare: config.minFare,
             roundTo: config.roundTo
           });
-          fallback = {
+
+          const breakdownNum = formatBreakdownNumeric(fareObj.breakdown || {});
+          const breakdownFmt = formatBreakdownFormatted(breakdownNum);
+
+          return res.json({
+            ok: true,
             fallback: true,
             distanceMeters: Math.round(meters),
             durationSeconds: approxDuration,
             fare: fareObj.fare,
-            breakdown: fareObj.breakdown
-          };
-          return res.json({ ok: true, ...fallback, config });
+            fareFormatted: formatMXN(fareObj.fare),
+            breakdown: breakdownNum,
+            breakdownFormatted: breakdownFmt,
+            config
+          });
         }
       } catch (e) {
         console.warn('Fallback haversine fallo', e);
@@ -130,7 +253,6 @@ router.post('/calculate-fare', async (req, res) => {
       return res.status(500).json({ ok: false, error: 'No se obtuvo distancia/tiempo de Google', route: r.data.routes[0], config });
     }
 
-    // calcular tarifa usando los valores obtenidos de Strapi (o defaults)
     const fareResult = calculateFareFromMetersSeconds(distanceMeters, durationSeconds, {
       baseFare: Number(config.baseFare),
       perKm: Number(config.perKm),
@@ -138,15 +260,20 @@ router.post('/calculate-fare', async (req, res) => {
       surge: Number(config.surge),
       minFare: Number(config.minFare),
       roundTo: Number(config.roundTo),
-      ...fareOpts // permite override por request si hace falta
+      ...fareOpts
     });
+
+    const breakdownNum = formatBreakdownNumeric(fareResult.breakdown || {});
+    const breakdownFmt = formatBreakdownFormatted(breakdownNum);
 
     return res.json({
       ok: true,
       distanceMeters,
       durationSeconds,
       fare: fareResult.fare,
-      breakdown: fareResult.breakdown,
+      fareFormatted: formatMXN(fareResult.fare),
+      breakdown: breakdownNum,
+      breakdownFormatted: breakdownFmt,
       route: r.data.routes[0],
       configUsed: config
     });
