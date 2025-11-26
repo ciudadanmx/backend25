@@ -28,14 +28,25 @@
       "type": "boolean"
     },
     "pic": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
       "allowedTypes": [
         "images",
         "files",
         "videos",
         "audios"
-      ],
-      "type": "media",
-      "multiple": false
+      ]
+    },
+    "tipo": {
+      "type": "enumeration",
+      "enum": [
+        "jardinero",
+        "consumo",
+        "exterior",
+        "sencilla",
+        "doble"
+      ]
     }
   }
 }

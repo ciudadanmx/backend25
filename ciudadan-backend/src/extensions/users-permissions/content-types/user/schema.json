@@ -290,6 +290,9 @@
     },
     "registrolegal": {
       "type": "text"
+    },
+    "promocode": {
+      "type": "string"
     }
   }
 }

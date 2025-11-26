@@ -1,3 +1,4 @@
+// server.js (reemplaza tu archivo con esto)
 const path = require("path");
 require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
 
@@ -9,27 +10,33 @@ const cors = require("cors"); // ✅ IMPORTANTE
 const app = express();
 const server = http.createServer(app);
 
-//const accept = process.env.CORS_ORIGIN || "http://localhost:33422"; // frontend por defecto
-const accept = ["http://localhost:3000", "http://localhost"]; // frontend por defecto
-//const PORT = process.env.SOCKET_PORT || 33034;
-//const PORT =  33034;
+// Añadí localhost:33422 al array de orígenes permitidos
+const accept = [
+  "http://localhost:3000",
+  "http://localhost",
+  "http://localhost:33422" // <-- agregado para tu frontend dev
+];
 const PORT = 3033;
 
 // ✅ Configurar CORS para Express (antes de registrar rutas)
 app.use(
   cors({
     origin: accept,
-    methods: ["GET", "POST"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+    credentials: true,
+    optionsSuccessStatus: 200
   })
 );
 
-// ✅ Configurar WebSocket con CORS
+// ✅ Configurar WebSocket con CORS (Socket.IO)
 const io = socketIo(server, {
   cors: {
     origin: accept,
-    methods: ["GET", "POST"],
+    methods: ["GET", "POST", "OPTIONS"],
+    credentials: true
   },
+  // path: '/socket.io', // descomenta si usas path custom
 });
 
 // Guardar `io` en `app` para usar en rutas
@@ -43,13 +50,7 @@ const priceCalculatingRoute = require("./routes/priceCalculating");
 const sendMessageRoute = require("./routes/trip-request");
 const wikiRoute = require("./routes/wiki"); // Notion wiki
 const notificaRoute = require("./routes/notifica"); // Notion wiki
-//const openpayRoute = require("./routes/openpay");
-
-// 🔹 Registrar rutas
-app.use("/", priceCalculatingRoute);
-app.use("/", sendMessageRoute);
-app.use("/wiki", wikiRoute); // ✅ acceso desde /wiki/:id
-app.use("/notifica", notificaRoute); // ✅ acceso desde /wiki/:id
+const testTrip = require('./routes/testTrip');
 let openpayRoute;
 try {
   openpayRoute = require("./routes/openpay");
@@ -58,14 +59,19 @@ try {
 }
 if (openpayRoute) app.use("/api", openpayRoute);
 
+// 🔹 Registrar rutas
+app.use("/", priceCalculatingRoute);
+app.use("/", sendMessageRoute);
+app.use("/wiki", wikiRoute);
+app.use("/notifica", notificaRoute);
+app.use('/test', testTrip);
+
 console.log("🔎 Rutas registradas:");
 app._router.stack.forEach((middleware) => {
   if (middleware.route) {
-    // middleware.route.path — rutas directas
     const methods = Object.keys(middleware.route.methods).join(",").toUpperCase();
     console.log(`${methods} ${middleware.route.path}`);
   } else if (middleware.name === "router" && middleware.handle && middleware.regexp) {
-    // mount point de un router
     console.log(`-- router montado:`, middleware.regexp);
   }
 });
@@ -75,7 +81,6 @@ io.on("connection", (socket) => {
   console.log("✅ Cliente conectado a WebSocket:", socket.id);
 
   // Permite al cliente registrarse en una "room" con su email:
-  // cliente -> socket.emit('register', { email: 'user@example.com' })
   socket.on('register', (data) => {
     try {
       const email = (data && data.email) ? String(data.email) : null;
@@ -101,5 +106,5 @@ io.on("connection", (socket) => {
 // Iniciar servidor
 server.listen(PORT, () => {
   console.log(`🚀 Servidor escuchando en el puerto ${PORT}`);
-  console.log(`🌐 CORS habilitado para: ${accept}`);
+  console.log(`🌐 CORS habilitado para: ${JSON.stringify(accept)}`);
 });

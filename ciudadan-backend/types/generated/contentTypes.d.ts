@@ -842,6 +842,7 @@ export interface PluginUsersPermissionsUser extends Schema.CollectionType {
     curado: Attribute.Decimal;
     secado: Attribute.Integer;
     registrolegal: Attribute.Text;
+    promocode: Attribute.String;
     createdAt: Attribute.DateTime;
     updatedAt: Attribute.DateTime;
     createdBy: Attribute.Relation<
@@ -2162,6 +2163,9 @@ export interface ApiMembresiasTipoMembresiasTipo extends Schema.CollectionType {
     level: Attribute.Integer;
     subtypes: Attribute.Boolean;
     pic: Attribute.Media<'images' | 'files' | 'videos' | 'audios'>;
+    tipo: Attribute.Enumeration<
+      ['jardinero', 'consumo', 'exterior', 'sencilla', 'doble']
+    >;
     createdAt: Attribute.DateTime;
     updatedAt: Attribute.DateTime;
     publishedAt: Attribute.DateTime;
