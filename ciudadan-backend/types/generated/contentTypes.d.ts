@@ -1512,6 +1512,7 @@ export interface ApiConfiguracionSistemaConfiguracionSistema
   attributes: {
     basic_set: Attribute.JSON;
     datos_generales: Attribute.JSON;
+    parametro: Attribute.String;
     createdAt: Attribute.DateTime;
     updatedAt: Attribute.DateTime;
     publishedAt: Attribute.DateTime;

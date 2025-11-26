@@ -17,6 +17,9 @@
     },
     "datos_generales": {
       "type": "json"
+    },
+    "parametro": {
+      "type": "string"
     }
   }
 }

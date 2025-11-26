@@ -51,6 +51,7 @@ const sendMessageRoute = require("./routes/trip-request");
 const wikiRoute = require("./routes/wiki"); // Notion wiki
 const notificaRoute = require("./routes/notifica"); // Notion wiki
 const testTrip = require('./routes/testTrip');
+const calculateFare = require('./routes/calculateFare');
 let openpayRoute;
 try {
   openpayRoute = require("./routes/openpay");
@@ -65,6 +66,7 @@ app.use("/", sendMessageRoute);
 app.use("/wiki", wikiRoute);
 app.use("/notifica", notificaRoute);
 app.use('/test', testTrip);
+app.use('/api', calculateFare);
 
 console.log("🔎 Rutas registradas:");
 app._router.stack.forEach((middleware) => {
