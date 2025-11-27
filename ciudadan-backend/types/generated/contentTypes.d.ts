@@ -3152,6 +3152,65 @@ export interface ApiTodoTodo extends Schema.CollectionType {
   };
 }
 
+export interface ApiViajeViaje extends Schema.CollectionType {
+  collectionName: 'viajes';
+  info: {
+    singularName: 'viaje';
+    pluralName: 'viajes';
+    displayName: 'viaje';
+    description: '';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    origencoords: Attribute.JSON;
+    destinocoords: Attribute.JSON;
+    conductorcoords: Attribute.JSON;
+    origendireccion: Attribute.JSON;
+    destinodireccion: Attribute.JSON;
+    pasajeromail: Attribute.Email;
+    conductormail: Attribute.Email;
+    solicitado: Attribute.DateTime;
+    iniciado: Attribute.DateTime;
+    concluido: Attribute.DateTime;
+    travelid: Attribute.String;
+    observaciones: Attribute.Text;
+    costo: Attribute.Decimal;
+    pagadoefectivo: Attribute.Decimal;
+    pagadolabory: Attribute.Decimal;
+    calificacionconductor: Attribute.Integer;
+    calificacionpasajero: Attribute.Integer;
+    track: Attribute.JSON;
+    status: Attribute.String;
+    pasajero: Attribute.Relation<
+      'api::viaje.viaje',
+      'oneToOne',
+      'plugin::users-permissions.user'
+    >;
+    conductor: Attribute.Relation<
+      'api::viaje.viaje',
+      'oneToOne',
+      'plugin::users-permissions.user'
+    >;
+    createdAt: Attribute.DateTime;
+    updatedAt: Attribute.DateTime;
+    publishedAt: Attribute.DateTime;
+    createdBy: Attribute.Relation<
+      'api::viaje.viaje',
+      'oneToOne',
+      'admin::user'
+    > &
+      Attribute.Private;
+    updatedBy: Attribute.Relation<
+      'api::viaje.viaje',
+      'oneToOne',
+      'admin::user'
+    > &
+      Attribute.Private;
+  };
+}
+
 export interface ApiWorldCoinWalletWorldCoinWallet
   extends Schema.CollectionType {
   collectionName: 'world_coin_wallets';
@@ -3252,6 +3311,7 @@ declare module '@strapi/types' {
       'api::store-categorie.store-categorie': ApiStoreCategorieStoreCategorie;
       'api::tarea.tarea': ApiTareaTarea;
       'api::todo.todo': ApiTodoTodo;
+      'api::viaje.viaje': ApiViajeViaje;
       'api::world-coin-wallet.world-coin-wallet': ApiWorldCoinWalletWorldCoinWallet;
     }
   }

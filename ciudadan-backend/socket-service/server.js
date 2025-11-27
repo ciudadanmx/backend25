@@ -1,4 +1,3 @@
-// server.js (reemplaza tu archivo con esto)
 const path = require("path");
 require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
 
@@ -52,6 +51,7 @@ const wikiRoute = require("./routes/wiki"); // Notion wiki
 const notificaRoute = require("./routes/notifica"); // Notion wiki
 const testTrip = require('./routes/testTrip');
 const calculateFare = require('./routes/calculateFare');
+const aceptarViajeRoute = require('./routes/aceptarViaje');
 let openpayRoute;
 try {
   openpayRoute = require("./routes/openpay");
@@ -67,6 +67,7 @@ app.use("/wiki", wikiRoute);
 app.use("/notifica", notificaRoute);
 app.use('/test', testTrip);
 app.use('/api', calculateFare);
+app.use('/api', aceptarViajeRoute);
 
 console.log("🔎 Rutas registradas:");
 app._router.stack.forEach((middleware) => {
@@ -98,6 +99,36 @@ io.on("connection", (socket) => {
   socket.on("speakTTS", (message) => {
     console.log("📢 Servidor recibió 'speakTTS' con mensaje:", message);
     io.emit("speakTTS", message);
+  });
+
+  // Reenvío de ofertas: cuando un cliente (conductor) emite 'ofertaviaje', lo reenvíamos al resto
+  socket.on('ofertaviaje', (payload, ack) => {
+    console.log('evento oferta taxista recibido');
+    try {
+      // validación mínima
+      const coords = payload && (payload.coordinates || payload.coords || payload.location);
+      const price = payload && (payload.price ?? payload.precio ?? null);
+      if (!coords || typeof coords.lat !== 'number' || typeof coords.lng !== 'number') {
+        if (typeof ack === 'function') ack({ ok: false, error: 'payload inválido: coordinates lat/lng requeridos' });
+        return;
+      }
+
+      const out = {
+        fromSocketId: socket.id,
+        coordinates: { lat: Number(coords.lat), lng: Number(coords.lng) },
+        price,
+        meta: payload.meta || null,
+        timestamp: new Date().toISOString(),
+      };
+
+      // reenviamos a todos los demás clientes (no incluye al emisor)
+      socket.broadcast.emit('ofertaviaje', out);
+
+      if (typeof ack === 'function') ack({ ok: true });
+    } catch (e) {
+      console.error('Error manejando ofertaviaje:', e);
+      if (typeof ack === 'function') ack({ ok: false, error: String(e) });
+    }
   });
 
   socket.on("disconnect", () => {
