@@ -27,6 +27,10 @@ function haversineMeters(a, b) {
   return R * c;
 }
 
+/**
+ * Endpoint: /test/send-trip
+ * (ya existente) -> emite 'trip-request' con payload de viaje simulado
+ */
 router.post('/send-trip', async (req, res) => {
   try {
     const io = req.app.get('io');
@@ -37,13 +41,14 @@ router.post('/send-trip', async (req, res) => {
       id: body.id || `trip-${Date.now()}`,
       originCoordinates: body.originCoordinates || { lat: 19.432607, lng: -99.133209 },
       originAdress: body.originAdress || 'Zócalo, CDMX',
-      destinationCoordinates: body.destinationCoordinates || body.destinationCoordinates || { lat: 19.4286, lng: -99.1276 },
+      destinationCoordinates: body.destinationCoordinates || { lat: 19.4286, lng: -99.1276 },
       destinationAdress: body.destinationAdress || 'Av. Reforma 1',
       broadcast: body.broadcast === undefined ? true : Boolean(body.broadcast),
       driverId: body.driverId || null,
       candidateDrivers: Array.isArray(body.candidateDrivers) ? body.candidateDrivers : [],
       createdAt: new Date().toISOString(),
       userEmail: body.userEmail,
+      meta: body.meta || {}
     };
 
     // Intentar llamar al endpoint de cálculo de tarifa (interno HTTP)
@@ -112,7 +117,6 @@ router.post('/send-trip', async (req, res) => {
     payload.distanceMeters = suggested ? suggested.distanceMeters : null;
     payload.durationSeconds = suggested ? suggested.durationSeconds : null;
     payload.roundedDistanceMeters = roundedDistanceMeters;
-    payload.meta = payload.meta || {};
     payload.meta.suggested = {
       price: payload.suggestedPrice,
       priceFormatted: payload.suggestedPriceFormatted,
@@ -125,6 +129,83 @@ router.post('/send-trip', async (req, res) => {
     return res.json({ ok: true, emittedTo: 'all', payload });
   } catch (err) {
     console.error('Error /test/send-trip', err);
+    return res.status(500).json({ ok: false, error: err.message || String(err) });
+  }
+});
+
+/**
+ * Nuevo endpoint: /test/cancel-trip
+ * - body esperado (opcional / con defaults):
+ *   { id, driverId, userEmail, cancelledBy, reason, code, refundAmount, notifyDriver, notifyUser, meta }
+ *
+ * Emite:
+ *   - evento global 'trip-cancel' con payload completo
+ *   - si driverId está presente: emite a room `driver:<driverId>` el mismo evento
+ *   - si userEmail está presente: emite a room `user:<userEmail>` el mismo evento
+ *
+ * Ajusta las rooms a la convención que uses en tu app (aquí uso 'driver:<id>' / 'user:<email>' como ejemplo).
+ */
+router.post('/cancel-trip', async (req, res) => {
+  try {
+    const io = req.app.get('io');
+    if (!io) return res.status(500).json({ ok: false, error: 'Socket.io no disponible (io no seteado)' });
+
+    const body = req.body || {};
+
+    // Si el cliente no envía id generamos uno mínimo para referencia
+    const tripId = body.id || `trip-${Date.now()}`;
+
+    const payload = {
+      id: tripId,
+      driverId: body.driverId || null,
+      userEmail: body.userEmail || null,
+      cancelledBy: body.cancelledBy || 'user', // user | driver | system | admin
+      reason: body.reason || 'cancelado por usuario',
+      code: body.code || null, // opcional: código de cancelación o motivo estandarizado
+      refundAmount: typeof body.refundAmount === 'number' ? body.refundAmount : null,
+      notifyDriver: body.notifyDriver === undefined ? true : Boolean(body.notifyDriver),
+      notifyUser: body.notifyUser === undefined ? true : Boolean(body.notifyUser),
+      meta: body.meta || {},
+      createdAt: new Date().toISOString(),
+      cancelledAt: new Date().toISOString()
+    };
+
+    // Log para debugging
+    console.log(`[testTrip] cancel-trip payload:`, payload);
+
+    // Emitir evento global para que clientes (paneles, drivers, usuarios en testing) reciban la cancelación
+    io.emit('trip-cancel', payload);
+
+    // Si se quiere notificar específicamente al driver (si la app los asigna a rooms)
+    if (payload.driverId && payload.notifyDriver) {
+      try {
+        // Convención de room: 'driver:<driverId>' (ajusta a tu implementación)
+        io.to(`driver:${payload.driverId}`).emit('trip-cancel', payload);
+        console.log(`[testTrip] emit to driver:${payload.driverId}`);
+      } catch (e) {
+        console.warn(`[testTrip] fallo al emitir a driver:${payload.driverId}`, e);
+      }
+    }
+
+    // Si se quiere notificar específicamente al usuario (por ejemplo por email->room)
+    if (payload.userEmail && payload.notifyUser) {
+      try {
+        // Convención de room: 'user:<email>' (ajusta a tu implementación)
+        io.to(`user:${payload.userEmail}`).emit('trip-cancel', payload);
+        console.log(`[testTrip] emit to user:${payload.userEmail}`);
+      } catch (e) {
+        console.warn(`[testTrip] fallo al emitir a user:${payload.userEmail}`, e);
+      }
+    }
+
+    // Respuesta
+    return res.json({
+      ok: true,
+      emittedTo: 'all' + (payload.driverId && payload.notifyDriver ? `, driver:${payload.driverId}` : '') + (payload.userEmail && payload.notifyUser ? `, user:${payload.userEmail}` : ''),
+      payload
+    });
+  } catch (err) {
+    console.error('Error /test/cancel-trip', err);
     return res.status(500).json({ ok: false, error: err.message || String(err) });
   }
 });
